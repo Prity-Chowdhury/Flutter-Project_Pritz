@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'login_page.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Supabase.initialize(
+    url: 'https://lsfhwwmiudxtnqhuyntj.supabase.co',
+    publishableKey: 'sb_publishable_oErYmywowTCsRsIsayCX9Q_6MeiMgV9',
+  );
+
   runApp(const MyApp());
 }
 
@@ -12,7 +19,6 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-
       title: "TaRa's Corner",
 
       theme: ThemeData(
