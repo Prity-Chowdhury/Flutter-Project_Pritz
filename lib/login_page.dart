@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'registration_page.dart';
 import 'home_page.dart';
 
@@ -10,23 +11,62 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  // Form controllers
   final _formKey = GlobalKey<FormState>();
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
 
   bool isPasswordVisible = false;
+  bool isLoading = false;
 
-  void login() {
-    if (_formKey.currentState!.validate()) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Validation successful!")));
+  final supabase = Supabase.instance.client;
 
-      Navigator.push(
+  Future<void> login() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    setState(() {
+      isLoading = true;
+    });
+
+    try {
+      await supabase.auth.signInWithPassword(
+        email: emailController.text.trim(),
+        password: passwordController.text.trim(),
+      );
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Login successful! Welcome to TaRa's Corner."),
+        ),
+      );
+
+      Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => const HomePage()),
       );
+    } on AuthException catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Something went wrong. Please try again."),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
     }
   }
 
@@ -92,12 +132,10 @@ class _LoginPageState extends State<LoginPage> {
               TextFormField(
                 controller: emailController,
                 keyboardType: TextInputType.emailAddress,
-
                 decoration: const InputDecoration(
                   labelText: "Email Address",
                   prefixIcon: Icon(Icons.email),
                 ),
-
                 validator: (value) {
                   if (value == null || value.isEmpty) {
                     return "Please enter email";
@@ -120,18 +158,15 @@ class _LoginPageState extends State<LoginPage> {
               TextFormField(
                 controller: passwordController,
                 obscureText: !isPasswordVisible,
-
                 decoration: InputDecoration(
                   labelText: "Password",
                   prefixIcon: const Icon(Icons.lock),
-
                   suffixIcon: IconButton(
                     icon: Icon(
                       isPasswordVisible
                           ? Icons.visibility
                           : Icons.visibility_off,
                     ),
-
                     onPressed: () {
                       setState(() {
                         isPasswordVisible = !isPasswordVisible;
@@ -139,7 +174,6 @@ class _LoginPageState extends State<LoginPage> {
                     },
                   ),
                 ),
-
                 validator: (value) {
                   if (value == null || value.isEmpty) {
                     return "Please enter password";
@@ -163,19 +197,21 @@ class _LoginPageState extends State<LoginPage> {
               SizedBox(
                 width: double.infinity,
                 height: 50,
-
                 child: ElevatedButton(
-                  onPressed: login,
-
+                  onPressed: isLoading ? null : login,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFDCCBF0),
                     foregroundColor: const Color(0xFF514064),
                   ),
-
-                  child: const Text(
-                    "LOGIN",
-                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-                  ),
+                  child: isLoading
+                      ? const CircularProgressIndicator()
+                      : const Text(
+                          "LOGIN",
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                 ),
               ),
 
@@ -191,7 +227,6 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                   );
                 },
-
                 child: const Text(
                   "Don't have an account? Register",
                   style: TextStyle(color: Color(0xFF514064)),

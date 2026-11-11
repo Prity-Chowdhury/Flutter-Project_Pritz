@@ -1,111 +1,515 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'login_page.dart';
+import 'addproduct_page.dart';
+import 'editproduct_page.dart';
+import 'cart_page.dart';
+import 'orders_page.dart';
 
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   const HomePage({super.key});
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  final supabase = Supabase.instance.client;
+  final searchController = TextEditingController();
+
+  String selectedCategory = 'All';
+
+  // Cart Products
+  List<Map<String, dynamic>> cartItems = [];
+
+  late Future<List<Map<String, dynamic>>> productsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    productsFuture = loadProducts();
+  }
+
+  // Read Products from Supabase
+  Future<List<Map<String, dynamic>>> loadProducts() async {
+    final response = await supabase
+        .from('products')
+        .select()
+        .order('created_at', ascending: false);
+
+    return List<Map<String, dynamic>>.from(response);
+  }
+
+  // Refresh Products
+  void refreshProducts() {
+    setState(() {
+      productsFuture = loadProducts();
+    });
+  }
+
+  // Delete Product
+  Future<void> deleteProduct(Map<String, dynamic> product) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Delete Product'),
+          content: Text('Are you sure you want to delete ${product['name']}?'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context, false);
+              },
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context, true);
+              },
+              child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm == true) {
+      try {
+        await supabase.from('products').delete().eq('id', product['id']);
+
+        if (!mounted) return;
+
+        refreshProducts();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Product deleted successfully!')),
+        );
+      } catch (e) {
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Delete failed: $e')));
+      }
+    }
+  }
+
+  // Edit Product
+  Future<void> editProduct(Map<String, dynamic> product) async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) {
+          return EditProductPage(product: product);
+        },
+      ),
+    );
+
+    if (result == true) {
+      refreshProducts();
+    }
+  }
+
+  // Open Cart Page
+  Future<void> openCart() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) {
+          return CartPage(cartItems: cartItems);
+        },
+      ),
+    );
+
+    if (!mounted) return;
+
+    setState(() {});
+  }
+
+  // Add Product to Cart
+  void addToCart(Map<String, dynamic> product) {
+    setState(() {
+      cartItems.add(product);
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${product['name']} added to cart!'),
+        duration: const Duration(seconds: 1),
+      ),
+    );
+  }
+
+  // Logout
+  Future<void> logout() async {
+    await supabase.auth.signOut();
+
+    if (!mounted) return;
+
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (context) => const LoginPage()),
+      (route) => false,
+    );
+  }
+
+  @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFFFF8F7),
+
+      // AppBar
       appBar: AppBar(
-        title: const Text("Profile"),
-        backgroundColor: const Color.fromARGB(255, 211, 192, 244),
-      ),
+        title: const Text(
+          "TaRa's Corner",
+          style: TextStyle(
+            color: Color(0xFF514064),
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        backgroundColor: const Color(0xFFE6DDF5),
+        iconTheme: const IconThemeData(color: Color(0xFF514064)),
 
-      body: Center(
-        child: Card(
-          elevation: 5,
-          color: const Color.fromARGB(255, 211, 192, 244),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.receipt_long),
+            tooltip: 'My Orders',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const OrdersPage()),
+              );
+            },
+          ),
+          // Cart Icon
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.shopping_cart),
+                onPressed: openCart,
+              ),
 
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(15),
+              if (cartItems.isNotEmpty)
+                Positioned(
+                  right: 5,
+                  top: 5,
+                  child: CircleAvatar(
+                    radius: 9,
+                    backgroundColor: Colors.red,
+                    child: Text(
+                      '${cartItems.length}',
+                      style: const TextStyle(fontSize: 10, color: Colors.white),
+                    ),
+                  ),
+                ),
+            ],
           ),
 
-          child: SizedBox(
-            width: 250,
-            height: 320,
+          // Refresh
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: refreshProducts,
+          ),
 
-            child: Padding(
-              padding: const EdgeInsets.all(20),
+          // Add Product
+          IconButton(
+            icon: const Icon(Icons.add_box),
+            tooltip: 'Add Product',
+            onPressed: () async {
+              final result = await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const AddProductPage()),
+              );
 
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Profile Icon
-                  const Icon(Icons.person, size: 70, color: Colors.black54),
+              if (result == true) {
+                refreshProducts();
+              }
+            },
+          ),
 
-                  const SizedBox(height: 10),
+          // Logout
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Logout',
+            onPressed: logout,
+          ),
+        ],
+      ),
 
-                  // Name
-                  const Text(
-                    "Your Name",
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                  ),
+      // Body
+      body: Column(
+        children: [
+          const SizedBox(height: 15),
 
-                  // Designation
-                  const Text(
-                    "Student",
-                    style: TextStyle(fontSize: 16, color: Colors.black54),
-                  ),
-
-                  const SizedBox(height: 10),
-
-                  // Divider
-                  const Divider(thickness: 2, color: Colors.black38),
-
-                  // Email
-                  const Row(
-                    children: [
-                      Icon(Icons.email, size: 20, color: Colors.black54),
-
-                      SizedBox(width: 8),
-
-                      Text(
-                        "example@gmail.com",
-                        style: TextStyle(fontSize: 14, color: Colors.black54),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 8),
-
-                  // Location
-                  const Row(
-                    children: [
-                      Icon(Icons.location_on, size: 20, color: Colors.black54),
-
-                      SizedBox(width: 8),
-
-                      Text(
-                        "Sylhet, Bangladesh",
-                        style: TextStyle(fontSize: 14, color: Colors.black54),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 15),
-
-                  // View Profile Button
-                  ElevatedButton(
-                    onPressed: () {
-                      print("View Profile Clicked");
-                    },
-
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: Colors.black54,
-                    ),
-
-                    child: const Text("View Profile"),
-                  ),
-                ],
+          // Welcome Text
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                "Welcome to TaRa's Corner!",
+                style: TextStyle(
+                  fontSize: 21,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF514064),
+                ),
               ),
             ),
           ),
-        ),
+
+          const SizedBox(height: 5),
+
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Discover your favourite jewellery and beauty products.',
+                style: TextStyle(color: Color(0xFF514064)),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 15),
+
+          // Search Bar
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: TextField(
+              controller: searchController,
+              onChanged: (value) {
+                setState(() {});
+              },
+              decoration: InputDecoration(
+                hintText: 'Search products...',
+                prefixIcon: const Icon(Icons.search),
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(15),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // Category Filter
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: ['All', 'Jewellery', 'Beauty'].map((category) {
+                final isSelected = selectedCategory == category;
+
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 5),
+                  child: ChoiceChip(
+                    label: Text(category),
+                    selected: isSelected,
+                    selectedColor: const Color(0xFFDCCBF0),
+                    backgroundColor: Colors.white,
+                    labelStyle: const TextStyle(color: Color(0xFF514064)),
+                    onSelected: (selected) {
+                      setState(() {
+                        selectedCategory = category;
+                      });
+                    },
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+
+          const SizedBox(height: 10),
+
+          // Product List
+          Expanded(
+            child: FutureBuilder<List<Map<String, dynamic>>>(
+              future: productsFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Text(
+                      'Error loading products: ${snapshot.error}',
+                      textAlign: TextAlign.center,
+                    ),
+                  );
+                }
+
+                final products = snapshot.data ?? [];
+
+                // Search and Category Filter
+                final filteredProducts = products.where((product) {
+                  final name = product['name'].toString().toLowerCase();
+
+                  final searchText = searchController.text.toLowerCase();
+
+                  final categoryMatches =
+                      selectedCategory == 'All' ||
+                      product['category'].toString().toLowerCase() ==
+                          selectedCategory.toLowerCase();
+
+                  final searchMatches = name.contains(searchText);
+
+                  return categoryMatches && searchMatches;
+                }).toList();
+
+                if (filteredProducts.isEmpty) {
+                  return const Center(
+                    child: Text(
+                      'No products found!',
+                      style: TextStyle(fontSize: 17, color: Color(0xFF514064)),
+                    ),
+                  );
+                }
+
+                return GridView.builder(
+                  padding: const EdgeInsets.all(12),
+                  itemCount: filteredProducts.length,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                    childAspectRatio: 0.62,
+                  ),
+
+                  itemBuilder: (context, index) {
+                    final product = filteredProducts[index];
+
+                    return Card(
+                      color: Colors.white,
+                      elevation: 3,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15),
+                      ),
+
+                      child: Padding(
+                        padding: const EdgeInsets.all(10),
+
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Product Icon
+                            Expanded(
+                              child: Center(
+                                child: Icon(
+                                  product['category']
+                                              .toString()
+                                              .toLowerCase() ==
+                                          'beauty'
+                                      ? Icons.spa
+                                      : Icons.diamond,
+                                  size: 65,
+                                  color: const Color(0xFFC5A45D),
+                                ),
+                              ),
+                            ),
+
+                            // Product Name
+                            Text(
+                              product['name'].toString(),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                                color: Color(0xFF514064),
+                              ),
+                            ),
+
+                            const SizedBox(height: 5),
+
+                            // Category
+                            Text(
+                              product['category'].toString(),
+                              style: const TextStyle(color: Colors.grey),
+                            ),
+
+                            const SizedBox(height: 5),
+
+                            // Price
+                            Text(
+                              '৳ ${product['price']}',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFFC5A45D),
+                              ),
+                            ),
+
+                            const SizedBox(height: 8),
+
+                            // Add to Cart
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFFDCCBF0),
+                                  foregroundColor: const Color(0xFF514064),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 8,
+                                  ),
+                                ),
+
+                                onPressed: () {
+                                  addToCart(product);
+                                },
+
+                                child: const Text('Add to Cart'),
+                              ),
+                            ),
+
+                            const SizedBox(height: 4),
+
+                            // Edit and Delete Buttons
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.edit,
+                                    color: Color(0xFF514064),
+                                  ),
+                                  tooltip: 'Edit Product',
+                                  onPressed: () {
+                                    editProduct(product);
+                                  },
+                                ),
+
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.delete,
+                                    color: Colors.red,
+                                  ),
+                                  tooltip: 'Delete Product',
+                                  onPressed: () {
+                                    deleteProduct(product);
+                                  },
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
