@@ -19,6 +19,7 @@ class _OrdersPageState extends State<OrdersPage> {
     ordersFuture = loadOrders();
   }
 
+  // Load Customer Orders
   Future<List<Map<String, dynamic>>> loadOrders() async {
     final user = supabase.auth.currentUser;
 
@@ -35,6 +36,7 @@ class _OrdersPageState extends State<OrdersPage> {
     return List<Map<String, dynamic>>.from(response);
   }
 
+  // Format Date
   String formatDate(dynamic date) {
     final parsedDate = DateTime.tryParse(date.toString());
 
@@ -43,10 +45,36 @@ class _OrdersPageState extends State<OrdersPage> {
     return '${parsedDate.day}/${parsedDate.month}/${parsedDate.year}';
   }
 
+  // Status Color
+  Color getStatusColor(String status) {
+    switch (status) {
+      case 'Pending':
+        return Colors.orange;
+
+      case 'Processing':
+        return Colors.blue;
+
+      case 'Delivered':
+        return Colors.green;
+
+      case 'Cancelled':
+        return Colors.red;
+
+      default:
+        return Colors.grey;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('My Orders')),
+      backgroundColor: const Color(0xFFFFF8F7),
+
+      appBar: AppBar(
+        title: const Text('My Orders'),
+        backgroundColor: const Color(0xFFE6DDF5),
+        foregroundColor: const Color(0xFF514064),
+      ),
 
       body: FutureBuilder<List<Map<String, dynamic>>>(
         future: ordersFuture,
@@ -73,13 +101,11 @@ class _OrdersPageState extends State<OrdersPage> {
 
           return RefreshIndicator(
             onRefresh: () async {
-              final newOrders = loadOrders();
-
               setState(() {
-                ordersFuture = newOrders;
+                ordersFuture = loadOrders();
               });
 
-              await newOrders;
+              await ordersFuture;
             },
 
             child: ListView.builder(
@@ -91,9 +117,16 @@ class _OrdersPageState extends State<OrdersPage> {
 
                 final items = List<dynamic>.from(order['items'] ?? []);
 
+                final status = order['status']?.toString() ?? 'Pending';
+
                 return Card(
+                  color: Colors.white,
                   margin: const EdgeInsets.only(bottom: 15),
                   elevation: 3,
+
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(15),
+                  ),
 
                   child: Padding(
                     padding: const EdgeInsets.all(15),
@@ -102,24 +135,66 @@ class _OrdersPageState extends State<OrdersPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
 
                       children: [
+                        // Order Number
                         Text(
                           'Order #${order['id']}',
                           style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
+                            color: Color(0xFF514064),
                           ),
                         ),
 
                         const SizedBox(height: 5),
 
+                        // Date
                         Text('Date: ${formatDate(order['created_at'])}'),
 
-                        const Divider(),
+                        const SizedBox(height: 12),
 
+                        // Order Status
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+
+                          children: [
+                            const Text(
+                              'Order Status:',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
+
+                              decoration: BoxDecoration(
+                                color: getStatusColor(
+                                  status,
+                                ).withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+
+                              child: Text(
+                                status,
+                                style: TextStyle(
+                                  color: getStatusColor(status),
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const Divider(height: 25),
+
+                        // Products
                         const Text(
                           'Products:',
                           style: TextStyle(fontWeight: FontWeight.bold),
                         ),
+
+                        const SizedBox(height: 8),
 
                         ...items.map((item) {
                           final product = Map<String, dynamic>.from(item);
@@ -141,8 +216,9 @@ class _OrdersPageState extends State<OrdersPage> {
                           );
                         }),
 
-                        const Divider(),
+                        const Divider(height: 25),
 
+                        // Total
                         Align(
                           alignment: Alignment.centerRight,
 

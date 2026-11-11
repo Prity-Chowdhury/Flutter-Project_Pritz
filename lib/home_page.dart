@@ -5,6 +5,8 @@ import 'addproduct_page.dart';
 import 'editproduct_page.dart';
 import 'cart_page.dart';
 import 'orders_page.dart';
+import 'admin_order_page.dart';
+import 'productdetails_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -19,18 +21,55 @@ class _HomePageState extends State<HomePage> {
 
   String selectedCategory = 'All';
 
-  // Cart Products
   List<Map<String, dynamic>> cartItems = [];
 
   late Future<List<Map<String, dynamic>>> productsFuture;
 
+  bool isAdmin = false;
+  bool isCheckingRole = true;
+
   @override
   void initState() {
     super.initState();
+
     productsFuture = loadProducts();
+    checkUserRole();
   }
 
-  // Read Products from Supabase
+  // Check Admin or Customer
+  Future<void> checkUserRole() async {
+    try {
+      final user = supabase.auth.currentUser;
+
+      if (user == null) return;
+
+      final response = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .maybeSingle();
+
+      if (!mounted) return;
+
+      setState(() {
+        isAdmin = response?['role'] == 'admin';
+        isCheckingRole = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        isAdmin = false;
+        isCheckingRole = false;
+      });
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Role checking failed: $e')));
+    }
+  }
+
+  // Read Products
   Future<List<Map<String, dynamic>>> loadProducts() async {
     final response = await supabase
         .from('products')
@@ -49,6 +88,8 @@ class _HomePageState extends State<HomePage> {
 
   // Delete Product
   Future<void> deleteProduct(Map<String, dynamic> product) async {
+    if (!isAdmin) return;
+
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) {
@@ -57,15 +98,11 @@ class _HomePageState extends State<HomePage> {
           content: Text('Are you sure you want to delete ${product['name']}?'),
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.pop(context, false);
-              },
+              onPressed: () => Navigator.pop(context, false),
               child: const Text('Cancel'),
             ),
             TextButton(
-              onPressed: () {
-                Navigator.pop(context, true);
-              },
+              onPressed: () => Navigator.pop(context, true),
               child: const Text('Delete', style: TextStyle(color: Colors.red)),
             ),
           ],
@@ -96,6 +133,8 @@ class _HomePageState extends State<HomePage> {
 
   // Edit Product
   Future<void> editProduct(Map<String, dynamic> product) async {
+    if (!isAdmin) return;
+
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
@@ -110,7 +149,21 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // Open Cart Page
+  // Add Product
+  Future<void> openAddProduct() async {
+    if (!isAdmin) return;
+
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const AddProductPage()),
+    );
+
+    if (result == true) {
+      refreshProducts();
+    }
+  }
+
+  // Open Cart
   Future<void> openCart() async {
     await Navigator.push(
       context,
@@ -126,7 +179,7 @@ class _HomePageState extends State<HomePage> {
     setState(() {});
   }
 
-  // Add Product to Cart
+  // Add to Cart
   void addToCart(Map<String, dynamic> product) {
     setState(() {
       cartItems.add(product);
@@ -137,6 +190,37 @@ class _HomePageState extends State<HomePage> {
         content: Text('${product['name']} added to cart!'),
         duration: const Duration(seconds: 1),
       ),
+    );
+  }
+
+  // Open Orders
+  void openOrders() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const OrdersPage()),
+    );
+  }
+
+  // Open Product Details
+  void openProductDetails(Map<String, dynamic> product) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ProductDetailsPage(
+          product: product,
+          onAddToCart: () => addToCart(product),
+        ),
+      ),
+    );
+  }
+
+  // Open Admin Orders
+  void openAdminOrders() {
+    if (!isAdmin) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const AdminOrdersPage()),
     );
   }
 
@@ -164,7 +248,6 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       backgroundColor: const Color(0xFFFFF8F7),
 
-      // AppBar
       appBar: AppBar(
         title: const Text(
           "TaRa's Corner",
@@ -173,21 +256,27 @@ class _HomePageState extends State<HomePage> {
             fontWeight: FontWeight.bold,
           ),
         ),
+
         backgroundColor: const Color(0xFFE6DDF5),
+
         iconTheme: const IconThemeData(color: Color(0xFF514064)),
 
         actions: [
+          // My Orders
           IconButton(
             icon: const Icon(Icons.receipt_long),
             tooltip: 'My Orders',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const OrdersPage()),
-              );
-            },
+            onPressed: openOrders,
           ),
-          // Cart Icon
+          // Manage Orders - Admin Only
+          if (!isCheckingRole && isAdmin)
+            IconButton(
+              icon: const Icon(Icons.inventory),
+              tooltip: 'Manage Orders',
+              onPressed: openAdminOrders,
+            ),
+
+          // Cart
           Stack(
             alignment: Alignment.center,
             children: [
@@ -218,21 +307,13 @@ class _HomePageState extends State<HomePage> {
             onPressed: refreshProducts,
           ),
 
-          // Add Product
-          IconButton(
-            icon: const Icon(Icons.add_box),
-            tooltip: 'Add Product',
-            onPressed: () async {
-              final result = await Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const AddProductPage()),
-              );
-
-              if (result == true) {
-                refreshProducts();
-              }
-            },
-          ),
+          // Add Product - Admin Only
+          if (!isCheckingRole && isAdmin)
+            IconButton(
+              icon: const Icon(Icons.add_box),
+              tooltip: 'Add Product',
+              onPressed: openAddProduct,
+            ),
 
           // Logout
           IconButton(
@@ -243,19 +324,22 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
 
-      // Body
       body: Column(
         children: [
           const SizedBox(height: 15),
 
           // Welcome Text
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                "Welcome to TaRa's Corner!",
-                style: TextStyle(
+                isCheckingRole
+                    ? "Welcome to TaRa's Corner!"
+                    : isAdmin
+                    ? "Welcome, Admin!"
+                    : "Welcome, Customer!",
+                style: const TextStyle(
                   fontSize: 21,
                   fontWeight: FontWeight.bold,
                   color: Color(0xFF514064),
@@ -266,13 +350,15 @@ class _HomePageState extends State<HomePage> {
 
           const SizedBox(height: 5),
 
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                'Discover your favourite jewellery and beauty products.',
-                style: TextStyle(color: Color(0xFF514064)),
+                isAdmin
+                    ? 'Manage your jewellery and beauty products.'
+                    : 'Discover your favourite jewellery and beauty products.',
+                style: const TextStyle(color: Color(0xFF514064)),
               ),
             ),
           ),
@@ -378,6 +464,7 @@ class _HomePageState extends State<HomePage> {
                 return GridView.builder(
                   padding: const EdgeInsets.all(12),
                   itemCount: filteredProducts.length,
+
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 2,
                     crossAxisSpacing: 12,
@@ -394,113 +481,120 @@ class _HomePageState extends State<HomePage> {
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(15),
                       ),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(15),
+                        onTap: () {
+                          openProductDetails(product);
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.all(10),
 
-                      child: Padding(
-                        padding: const EdgeInsets.all(10),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
 
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Product Icon
-                            Expanded(
-                              child: Center(
-                                child: Icon(
-                                  product['category']
-                                              .toString()
-                                              .toLowerCase() ==
-                                          'beauty'
-                                      ? Icons.spa
-                                      : Icons.diamond,
-                                  size: 65,
-                                  color: const Color(0xFFC5A45D),
-                                ),
-                              ),
-                            ),
-
-                            // Product Name
-                            Text(
-                              product['name'].toString(),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 15,
-                                color: Color(0xFF514064),
-                              ),
-                            ),
-
-                            const SizedBox(height: 5),
-
-                            // Category
-                            Text(
-                              product['category'].toString(),
-                              style: const TextStyle(color: Colors.grey),
-                            ),
-
-                            const SizedBox(height: 5),
-
-                            // Price
-                            Text(
-                              '৳ ${product['price']}',
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFFC5A45D),
-                              ),
-                            ),
-
-                            const SizedBox(height: 8),
-
-                            // Add to Cart
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFFDCCBF0),
-                                  foregroundColor: const Color(0xFF514064),
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 8,
+                            children: [
+                              // Product Icon
+                              Expanded(
+                                child: Center(
+                                  child: Icon(
+                                    product['category']
+                                                .toString()
+                                                .toLowerCase() ==
+                                            'beauty'
+                                        ? Icons.spa
+                                        : Icons.diamond,
+                                    size: 65,
+                                    color: const Color(0xFFC5A45D),
                                   ),
                                 ),
-
-                                onPressed: () {
-                                  addToCart(product);
-                                },
-
-                                child: const Text('Add to Cart'),
                               ),
-                            ),
 
-                            const SizedBox(height: 4),
+                              // Product Name
+                              Text(
+                                product['name'].toString(),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15,
+                                  color: Color(0xFF514064),
+                                ),
+                              ),
 
-                            // Edit and Delete Buttons
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(
-                                    Icons.edit,
-                                    color: Color(0xFF514064),
+                              const SizedBox(height: 5),
+
+                              // Category
+                              Text(
+                                product['category'].toString(),
+                                style: const TextStyle(color: Colors.grey),
+                              ),
+
+                              const SizedBox(height: 5),
+
+                              // Price
+                              Text(
+                                '৳ ${product['price']}',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFFC5A45D),
+                                ),
+                              ),
+
+                              const SizedBox(height: 8),
+
+                              // Add to Cart
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFFDCCBF0),
+                                    foregroundColor: const Color(0xFF514064),
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 8,
+                                    ),
                                   ),
-                                  tooltip: 'Edit Product',
+
                                   onPressed: () {
-                                    editProduct(product);
+                                    addToCart(product);
                                   },
-                                ),
 
-                                IconButton(
-                                  icon: const Icon(
-                                    Icons.delete,
-                                    color: Colors.red,
-                                  ),
-                                  tooltip: 'Delete Product',
-                                  onPressed: () {
-                                    deleteProduct(product);
-                                  },
+                                  child: const Text('Add to Cart'),
                                 ),
-                              ],
-                            ),
-                          ],
+                              ),
+
+                              const SizedBox(height: 4),
+
+                              // Edit and Delete - Admin Only
+                              if (!isCheckingRole && isAdmin)
+                                Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceEvenly,
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(
+                                        Icons.edit,
+                                        color: Color(0xFF514064),
+                                      ),
+                                      tooltip: 'Edit Product',
+                                      onPressed: () {
+                                        editProduct(product);
+                                      },
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(
+                                        Icons.delete,
+                                        color: Colors.red,
+                                      ),
+                                      tooltip: 'Delete Product',
+                                      onPressed: () {
+                                        deleteProduct(product);
+                                      },
+                                    ),
+                                  ],
+                                ),
+                            ],
+                          ),
                         ),
                       ),
                     );
