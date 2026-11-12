@@ -493,19 +493,52 @@ class _HomePageState extends State<HomePage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
 
                             children: [
-                              // Product Icon
+                              // Product Image
                               Expanded(
-                                child: Center(
-                                  child: Icon(
-                                    product['category']
-                                                .toString()
-                                                .toLowerCase() ==
-                                            'beauty'
-                                        ? Icons.spa
-                                        : Icons.diamond,
-                                    size: 65,
-                                    color: const Color(0xFFC5A45D),
-                                  ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child:
+                                      product['image_url'] != null &&
+                                          product['image_url']
+                                              .toString()
+                                              .isNotEmpty
+                                      ? Image.network(
+                                          product['image_url'].toString(),
+                                          width: double.infinity,
+                                          fit: BoxFit.cover,
+                                          loadingBuilder:
+                                              (context, child, progress) {
+                                                if (progress == null)
+                                                  return child;
+
+                                                return const Center(
+                                                  child:
+                                                      CircularProgressIndicator(),
+                                                );
+                                              },
+                                          errorBuilder:
+                                              (context, error, stackTrace) {
+                                                return const Center(
+                                                  child: Icon(
+                                                    Icons.broken_image,
+                                                    size: 65,
+                                                    color: Color(0xFFC5A45D),
+                                                  ),
+                                                );
+                                              },
+                                        )
+                                      : Center(
+                                          child: Icon(
+                                            product['category']
+                                                        .toString()
+                                                        .toLowerCase() ==
+                                                    'beauty'
+                                                ? Icons.spa
+                                                : Icons.diamond,
+                                            size: 65,
+                                            color: const Color(0xFFC5A45D),
+                                          ),
+                                        ),
                                 ),
                               ),
 

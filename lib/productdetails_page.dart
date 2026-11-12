@@ -31,13 +31,33 @@ class ProductDetailsPage extends StatelessWidget {
                 color: const Color(0xFFE6DDF5),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: Icon(
-                product['category'].toString().toLowerCase() == 'beauty'
-                    ? Icons.spa
-                    : Icons.diamond,
-                size: 110,
-                color: const Color(0xFFC5A45D),
-              ),
+
+              child:
+                  product['image_url'] != null &&
+                      product['image_url'].toString().isNotEmpty
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(20),
+                      child: Image.network(
+                        product['image_url'].toString(),
+                        width: double.infinity,
+                        height: 280,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return const Icon(
+                            Icons.broken_image,
+                            size: 110,
+                            color: Color(0xFFC5A45D),
+                          );
+                        },
+                      ),
+                    )
+                  : Icon(
+                      product['category'].toString().toLowerCase() == 'beauty'
+                          ? Icons.spa
+                          : Icons.diamond,
+                      size: 110,
+                      color: const Color(0xFFC5A45D),
+                    ),
             ),
             const SizedBox(height: 25),
             Text(
